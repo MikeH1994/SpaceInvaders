@@ -7,20 +7,22 @@ import java.io.Serializable;
 
 
 import objects.*;
+import objects.units.*;
 
-public final class SIController implements Serializable, KeyListener{
-    private static SIController _STATIC_INSTANCE;
-    private final SIGameWindow _gameWindow;
+public final class SIGameController implements Serializable, KeyListener{
+    public final SIGameWindow _gameWindow;
+    private static SIGameController _STATIC_INSTANCE;
+    private SIPlayer _player = null;
     private long _currentID = 0;
     private long _lastStepInMillisecs = 0;
-    private float _maxFrameRate = 20;
+    private float _maxFrameRate = 120;
     private float _minimumStepTimeInMilliseconds = 1000.0f/_maxFrameRate;
     private int _xCollisionCells = 3;
     private int _yCollisionCells = 3;
     private int _updateCellsEveryNSteps = 4;
-    private int _playRegionWidth = 1000;
-    private int _playRegionHeight = 1000;
     private int _currentStep = 0;
+    private int _mapWidth = 1000;
+    private int _mapHeight = 1000;
 
     public ArrayList<SIObject> _objects = new ArrayList<SIObject>();
     private ArrayList<SIObject> _objectAddQueue = new ArrayList<SIObject>();
@@ -28,13 +30,13 @@ public final class SIController implements Serializable, KeyListener{
     private ArrayList<ArrayList<SIObject>> _heirarchicalBoundingBox = new ArrayList<ArrayList<SIObject>>();
 
     public static void main(String[] args){
-        new SIController().run();
+        new SIGameController().run();
     }
-    public static SIController getInstance(){
+    public static SIGameController getInstance(){
         return _STATIC_INSTANCE;
     }
 
-    public SIController(){
+    public SIGameController(){
        _STATIC_INSTANCE = this;
        _gameWindow  = new SIGameWindow();
        for(int i = 0; i<_xCollisionCells*_yCollisionCells; i++){
@@ -42,17 +44,21 @@ public final class SIController implements Serializable, KeyListener{
        }
     }
     public void run(){
+        new SIPlayer(500,500);
         while(true){
             _lastStepInMillisecs = System.currentTimeMillis();
-            nextStep();
-            parseQueue();
-            _gameWindow.repaint();
             if (_currentStep%_updateCellsEveryNSteps == 0){
                 updateHeirarchicalBoundingBox();
             }
+            nextStep();
+            parseQueue();
+            _gameWindow.repaint();
             capStepRate();
             _currentStep++;
         }
+    }
+    public void setPlayer(SIPlayer player){
+        _player = player;
     }
     public long generateID(){
         return _currentID++;
@@ -65,7 +71,21 @@ public final class SIController implements Serializable, KeyListener{
         }
         return false;
     }
+    public boolean positionInBounds(int x, int y){
+        if (x>= 0 && x<_mapWidth){
+            if (y>=0 && y<_mapHeight){
+                return true;
+            }
+        }
+        return false;
+    }
 
+    public int getMapWidth(){
+        return _mapWidth;
+    }
+    public int getMapHeight(){
+        return _mapHeight;
+    }
     public int getObjectIndex(SIObject obj){
         long id = obj.getID();
         long currentID;
@@ -78,8 +98,8 @@ public final class SIController implements Serializable, KeyListener{
         return -1;
     }
     public int getCellIndexFromPosition(int x,int y){
-        int xCell = (x*_xCollisionCells)/_playRegionWidth;
-        int yCell = (y*_yCollisionCells)/_playRegionHeight;
+        int xCell = (x*_xCollisionCells)/_mapWidth;
+        int yCell = (y*_yCollisionCells)/_mapHeight;
         int arrayIndex = getCellIndex(xCell,yCell);
         return arrayIndex;
     }
@@ -96,13 +116,13 @@ public final class SIController implements Serializable, KeyListener{
         _objectAddQueue.add(obj);
     }
     public void removeObject(SIObject obj){
-        _objectRemoveQueue.remove(getObjectIndex(obj));
+        _objectRemoveQueue.add(obj);
     }
     public void capStepRate(){
         long timeSpentInFrame = System.currentTimeMillis() - _lastStepInMillisecs;
         if (timeSpentInFrame<_minimumStepTimeInMilliseconds){
             try{
-                wait((long) (_minimumStepTimeInMilliseconds-timeSpentInFrame));
+                Thread.sleep((long) (_minimumStepTimeInMilliseconds-timeSpentInFrame));
             } catch (InterruptedException e){
                 System.out.println("Interrupted Exception caught in capStepRate()");
             }
@@ -114,11 +134,16 @@ public final class SIController implements Serializable, KeyListener{
     }
 
     private void parseQueue() {
+        SIObject obj;
         while(_objectAddQueue.size()>0){
-            _objects.add(_objectAddQueue.remove(0));
+            obj = _objectAddQueue.remove(0);
+            _objects.add(obj);
         }
+
         while(_objectRemoveQueue.size()>0){
-            _objects.add(_objectRemoveQueue.remove(0));
+            obj = _objectRemoveQueue.remove(0);
+            _objects.remove(obj);
+            _heirarchicalBoundingBox.get(obj.getCellIndex()).remove(obj);
         }
     }
     private void nextStep(){
@@ -143,11 +168,30 @@ public final class SIController implements Serializable, KeyListener{
 
     @Override
     public void keyPressed(KeyEvent e){
-
+        if (_player!=null){
+            if (e.getKeyCode() == KeyEvent.VK_D){
+                _player.setXDirection(1);
+            }
+            if (e.getKeyCode() == KeyEvent.VK_A){
+                _player.setXDirection(-1);
+            }
+            if (e.getKeyCode() == KeyEvent.VK_SPACE){
+                _player.fire();
+            }
+        }
     }
     @Override
     public void keyReleased(KeyEvent e){
+        if (e.getKeyCode() == KeyEvent.VK_D || e.getKeyCode() == KeyEvent.VK_A){
+            if (_player!=null){
+                _player.setXDirection(0);
+            }
+        }
+        if (e.getKeyCode() == KeyEvent.VK_SPACE){
+            if (_player!=null){
 
+            }
+        }
     }
     @Override
     public void keyTyped(KeyEvent e){
